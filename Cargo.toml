@@ -7,3 +7,17 @@ edition = "2024"
 # Desativa os padrões (que puxam wgpu/vulkan) e usa glow (OpenGL)
 eframe = { version = "0.36.1", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
 sha2 = "0.11.0"
+
+
+[profile.release]
+opt-level = "z"     # Otimiza para tamanho mínimo
+lto = true          # Link-Time Optimization (remove código morto)
+codegen-units = 1   # Melhora a eficácia do LTO
+panic = "abort"     # Remove o custo do unwinding de panics
+strip = true        # Remove símbolos de depuração automaticamente
+
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+rustflags = ["-C", "target-feature=+crt-static", "-C", "link-args=-static"]
