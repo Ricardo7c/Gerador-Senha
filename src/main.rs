@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use eframe::egui;
 use sha2::{Digest, Sha256};
 
@@ -212,7 +214,7 @@ impl eframe::App for GeradorSenha {
 
                 // MENSAGEM DE STATUS/ERRO
                 if !self.mensagem.is_empty() {
-                    ui.add_space(10.0);
+                    ui.add_space(2.0);
                     ui.label(&self.mensagem);
                 }
             });
@@ -227,7 +229,7 @@ impl eframe::App for GeradorSenha {
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([380.0, 130.0])
+            .with_inner_size([380.0, 140.0])
             .with_resizable(false),
         ..Default::default()
     };

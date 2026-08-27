@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # Desativa os padrões (que puxam wgpu/vulkan) e usa glow (OpenGL)
-eframe = { version = "0.36.1", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+eframe = { version = "0.36.1", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
 sha2 = "0.11.0"
 
 
