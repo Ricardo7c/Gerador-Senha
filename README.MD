@@ -12,8 +12,8 @@ Para compilar o código, declare as seguintes dependências no arquivo de manife
 
 ```toml
 [dependencies]
-eframe = "0.36.1"
-sha2 = "0.10"
+eframe = { version = "0.36.1", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+sha2 = "0.11.0"
 
 ```
 
