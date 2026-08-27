@@ -90,6 +90,7 @@ fn phrase_to_password(
 struct GeradorSenha {
     frase: String,
     pepper: String,
+    mostrar_pepper: bool,
     senha: String,
     tamanho: usize,
     incluir_simbolos: bool,
@@ -105,6 +106,7 @@ impl Default for GeradorSenha {
         Self {
             frase: String::new(),
             pepper: String::new(),
+            mostrar_pepper: false,
             senha: String::new(),
             tamanho: 16,
             incluir_simbolos: true,
@@ -126,25 +128,36 @@ impl eframe::App for GeradorSenha {
                     ui.label("Frase:");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.frase)
-                            .desired_width(350.0)
+                            .desired_width(320.0)
                             .hint_text("Digite sua frase..."),
                     );
                 });
 
                 ui.add_space(5.0);
 
+                // PEPPER
                 ui.horizontal(|ui| {
-                    // PEPPER
                     ui.label("Pepper:");
                     ui.add(
                         egui::TextEdit::singleline(&mut self.pepper)
-                            .desired_width(350.0)
-                            .password(true)
+                            .desired_width(285.0)
+                            .password(!self.mostrar_pepper)
                             .hint_text("Opcional"),
                     );
+
+                    let icon = if self.mostrar_pepper { "🔒" } else { "👁" };
+                    let tooltip = if self.mostrar_pepper {
+                        "Ocultar pepper"
+                    } else {
+                        "Exibir pepper"
+                    };
+
+                    if ui.button(icon).on_hover_text(tooltip).clicked() {
+                        self.mostrar_pepper = !self.mostrar_pepper;
+                    }
                 });
 
-                ui.add_space(15.0);
+                ui.add_space(10.0);
 
                 // TAMANHO
                 ui.horizontal(|ui| {
@@ -183,7 +196,6 @@ impl eframe::App for GeradorSenha {
                 // SENHA GERADA
                 if !self.senha.is_empty() {
                     ui.horizontal(|ui| {
-                        // Estima a largura dos elementos (label + texto da senha + botão + gaps)
                         let estimated_width = (self.senha.len() as f32 * 8.0) + 32.0;
                         let left_padding = ((ui.available_width() - estimated_width) / 2.0).max(0.0);
                         
@@ -191,7 +203,6 @@ impl eframe::App for GeradorSenha {
 
                         ui.monospace(&self.senha);
 
-                        // Copiar para a área de transferência usando ícone
                         if ui.button("📋").on_hover_text("Copiar senha").clicked() {
                             ui.ctx().copy_text(self.senha.clone());
                             self.mensagem = "Senha copiada!".to_string();
@@ -216,7 +227,7 @@ impl eframe::App for GeradorSenha {
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([370.0, 150.0])
+            .with_inner_size([380.0, 130.0])
             .with_resizable(false),
         ..Default::default()
     };
