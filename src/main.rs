@@ -1,11 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use eframe::egui;
+use iced::clipboard;
+use iced::widget::{button, checkbox, column, container, row, text, text_input, slider};
+use iced::{Center, Element, Length, Size, Task};
+use iced::font::{self, Font};
 use sha2::{Digest, Sha256};
 
-// ============================================================
-// GERADOR DE SENHA
-// ============================================================
 
 fn phrase_to_password(
     phrase: &str,
@@ -22,9 +22,6 @@ fn phrase_to_password(
     let digits = b"0123456789";
     let symbols = b"!@#$%^&*()-_+=";
 
-    // --------------------------------------------------------
-    // Cria a lista de caracteres possíveis
-    // --------------------------------------------------------
     let mut combined = Vec::new();
     combined.extend_from_slice(lowers);
     combined.extend_from_slice(uppers);
@@ -34,17 +31,11 @@ fn phrase_to_password(
         combined.extend_from_slice(symbols);
     }
 
-    // --------------------------------------------------------
-    // SHA-256
-    // --------------------------------------------------------
     let mut hasher = Sha256::new();
     hasher.update(salt.as_bytes());
     hasher.update(phrase.as_bytes());
     let digest = hasher.finalize();
 
-    // --------------------------------------------------------
-    // Classes obrigatórias
-    // --------------------------------------------------------
     let classes: Vec<&[u8]> = if include_symbols {
         vec![lowers, uppers, digits, symbols]
     } else {
@@ -53,18 +44,12 @@ fn phrase_to_password(
 
     let mut pwd_chars = Vec::new();
 
-    // --------------------------------------------------------
-    // Garante pelo menos um caractere de cada classe
-    // --------------------------------------------------------
     for (i, class) in classes.iter().enumerate() {
         let byte = digest[i];
         let index = byte as usize % class.len();
         pwd_chars.push(class[index]);
     }
 
-    // --------------------------------------------------------
-    // Preenche o restante da senha
-    // --------------------------------------------------------
     let mut idx = classes.len();
     while pwd_chars.len() < length {
         let byte = digest[idx % digest.len()];
@@ -73,21 +58,11 @@ fn phrase_to_password(
         idx += 1;
     }
 
-    // --------------------------------------------------------
-    // Rotação determinística
-    // --------------------------------------------------------
     let rot = digest[classes.len()] as usize % length;
     pwd_chars.rotate_left(rot);
 
-    // --------------------------------------------------------
-    // Converte Vec<u8> para String
-    // --------------------------------------------------------
     Ok(String::from_utf8(pwd_chars).unwrap())
 }
-
-// ============================================================
-// ESTADO DA APLICAÇÃO
-// ============================================================
 
 struct GeradorSenha {
     frase: String,
@@ -99,144 +74,170 @@ struct GeradorSenha {
     mensagem: String,
 }
 
-// ============================================================
-// VALORES INICIAIS
-// ============================================================
-
 impl Default for GeradorSenha {
     fn default() -> Self {
         Self {
+            tamanho: 16,
+            incluir_simbolos: true,
             frase: String::new(),
             pepper: String::new(),
             mostrar_pepper: false,
             senha: String::new(),
-            tamanho: 16,
-            incluir_simbolos: true,
             mensagem: String::new(),
         }
     }
 }
 
-// ============================================================
-// INTERFACE EGUI (API 0.36+)
-// ============================================================
+#[derive(Debug, Clone)]
+enum Message {
+    FraseAlterada(String),
+    PepperAlterado(String),
+    AlternarMostrarPepper,
+    TamanhoAlterado(usize),
+    AlternarSimbolos(bool),
+    GerarSenha,
+    CopiarSenha,
+}
 
-impl eframe::App for GeradorSenha {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.vertical_centered(|ui| {
-                // FRASE
-                ui.horizontal(|ui| {
-                    ui.label("Frase:");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.frase)
-                            .desired_width(320.0)
-                            .hint_text("Digite sua frase..."),
-                    );
-                });
-
-                ui.add_space(5.0);
-
-                // PEPPER
-                ui.horizontal(|ui| {
-                    ui.label("Pepper:");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.pepper)
-                            .desired_width(285.0)
-                            .password(!self.mostrar_pepper)
-                            .hint_text("Opcional"),
-                    );
-
-                    let icon = if self.mostrar_pepper { "🔒" } else { "👁" };
-                    let tooltip = if self.mostrar_pepper {
-                        "Ocultar pepper"
-                    } else {
-                        "Exibir pepper"
-                    };
-
-                    if ui.button(icon).on_hover_text(tooltip).clicked() {
-                        self.mostrar_pepper = !self.mostrar_pepper;
+impl GeradorSenha {
+    fn update(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::FraseAlterada(valor) => {
+                self.frase = valor;
+                Task::none()
+            }
+            Message::PepperAlterado(valor) => {
+                self.pepper = valor;
+                Task::none()
+            }
+            Message::AlternarMostrarPepper => {
+                self.mostrar_pepper = !self.mostrar_pepper;
+                Task::none()
+            }
+            Message::TamanhoAlterado(valor) => {
+                self.tamanho = valor;
+                Task::none()
+            }
+            Message::AlternarSimbolos(valor) => {
+                self.incluir_simbolos = valor;
+                Task::none()
+            }
+            Message::GerarSenha => {
+                match phrase_to_password(
+                    &self.frase,
+                    self.tamanho,
+                    self.incluir_simbolos,
+                    &self.pepper,
+                ) {
+                    Ok(pwd) => {
+                        self.senha = pwd;
+                        self.mensagem.clear();
                     }
-                });
-
-                ui.add_space(10.0);
-
-                // TAMANHO
-                ui.horizontal(|ui| {
-                    ui.label("Tamanho:");
-                    ui.add(
-                        egui::DragValue::new(&mut self.tamanho)
-                            .range(4..=128),
-                    );
-
-                    ui.add_space(10.0);
-                    // SÍMBOLOS
-                    ui.checkbox(&mut self.incluir_simbolos, "Incluir símbolos");
-
-                    // BOTÃO GERAR
-                    if ui.button("🔑  GERAR SENHA").clicked() {
-                        match phrase_to_password(
-                            &self.frase,
-                            self.tamanho,
-                            self.incluir_simbolos,
-                            &self.pepper,
-                        ) {
-                            Ok(password) => {
-                                self.senha = password;
-                                self.mensagem.clear();
-                            }
-                            Err(error) => {
-                                self.senha.clear();
-                                self.mensagem = error;
-                            }
-                        }
+                    Err(err) => {
+                        self.senha.clear();
+                        self.mensagem = err;
                     }
-                });
-
-                ui.add_space(10.0);
-    
-                // SENHA GERADA
-                if !self.senha.is_empty() {
-                    ui.horizontal(|ui| {
-                        let estimated_width = (self.senha.len() as f32 * 8.0) + 32.0;
-                        let left_padding = ((ui.available_width() - estimated_width) / 2.0).max(0.0);
-                        
-                        ui.add_space(left_padding);
-
-                        ui.monospace(&self.senha);
-
-                        if ui.button("📋").on_hover_text("Copiar senha").clicked() {
-                            ui.ctx().copy_text(self.senha.clone());
-                            self.mensagem = "Senha copiada!".to_string();
-                        }
-                    });
                 }
-
-                // MENSAGEM DE STATUS/ERRO
-                if !self.mensagem.is_empty() {
-                    ui.add_space(2.0);
-                    ui.label(&self.mensagem);
+                if self.frase.trim().is_empty(){
+                    self.senha.clear();
                 }
-            });
-        });
+                Task::none()
+            }
+            Message::CopiarSenha => {
+                self.mensagem = "Senha copiada!".to_string();
+                clipboard::write(self.senha.clone())
+            }
+        }
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        // Campo Frase
+        let campo_frase = row![
+            text("Frase:").width(60),
+            text_input("Digite sua frase...", &self.frase)
+                .on_input(Message::FraseAlterada)
+                .width(Length::Fill)
+        ]
+        .spacing(10)
+        .align_y(Center);
+
+        // Campo Pepper
+        let icone_olho = if self.mostrar_pepper { "🔒" } else { "👁" };
+        let campo_pepper = row![
+            text("Pepper:").width(60),
+            text_input("Opcional", &self.pepper)
+                .secure(!self.mostrar_pepper)
+                .on_input(Message::PepperAlterado)
+                .width(Length::Fill),
+            button(text(icone_olho)).on_press(Message::AlternarMostrarPepper)
+        ]
+        .spacing(10)
+        .align_y(Center);
+
+        // Controles de Configuração
+        let controles = row![
+            text("Tamanho:"),
+            text(format!("{:02}", self.tamanho)).font(Font {
+                weight: font::Weight::Bold,
+                ..Default::default()
+            }),
+            slider(
+                4.0..=64.0,
+                self.tamanho as f64,
+                |valor| Message::TamanhoAlterado(valor as usize),
+            )
+            .width(128),
+            checkbox(self.incluir_simbolos)
+                .label("Símbolos")
+                .on_toggle(Message::AlternarSimbolos),
+            button(text("🔑 Gerar")).on_press(Message::GerarSenha)
+        ]
+        .spacing(6)
+        .align_y(Center)
+        .width(Length::Fill);
+
+        // Layout Principal
+        let mut conteudo = column![campo_frase, campo_pepper, controles]
+            .spacing(12)
+            .align_x(Center);
+
+        // Exibição da Senha
+        if !self.senha.is_empty() {
+            let bloco_senha = row![
+                text(&self.senha).size(16),
+                button(text("📋")).on_press(Message::CopiarSenha)
+            ]
+            .spacing(10)
+            .align_y(Center);
+
+            conteudo = conteudo.push(bloco_senha);
+        }
+
+        // Mensagens de Status / Erro
+        if !self.mensagem.is_empty() {
+            conteudo = conteudo.push(text(&self.mensagem).size(13));
+        }
+
+        container(conteudo)
+            .padding(16)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .into()
     }
 }
 
-// ============================================================
-// MAIN
-// ============================================================
-
-fn main() -> eframe::Result<()> {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([380.0, 140.0])
-            .with_resizable(false),
-        ..Default::default()
-    };
-
-    eframe::run_native(
-        "Gerador de Senhas",
-        options,
-        Box::new(|_cc| Ok(Box::new(GeradorSenha::default()))),
+fn main() -> iced::Result {
+    iced::application(
+        GeradorSenha::default,
+        GeradorSenha::update,
+        GeradorSenha::view,
     )
+    .title("Gerador de Senhas")
+    .window(iced::window::Settings {
+        size: Size::new(460.0, 220.0),
+        resizable: false,
+        ..Default::default()
+    })
+    .run()
 }
